@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion'
 import { ChatMetrics, Language } from '@/types/chat'
 import { ts } from '@/lib/i18n'
+import { FloatingOrbs } from '../FloatingOrbs'
 
 interface Props {
   metrics: ChatMetrics
@@ -27,7 +28,8 @@ export function SlideMonths({ metrics, language, accentColor }: Props) {
   const displayEntries = monthEntries.slice(-12)
 
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-6 px-6">
+    <div className="relative flex flex-col items-center justify-center h-full gap-6 px-6 overflow-hidden">
+      <FloatingOrbs accentColor={accentColor} />
       <motion.p
         className="text-white text-2xl font-bold text-center"
         initial={{ opacity: 0, y: -20 }}

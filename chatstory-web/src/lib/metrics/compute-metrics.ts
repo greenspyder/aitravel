@@ -108,8 +108,13 @@ export function computeMetrics(chat: ParsedChat): ChatMetrics {
     }
   }
 
+  // Exclude emojis that appear in participant names
+  const nameEmojis = new Set<string>()
+  participants.forEach(name => extractEmojis(name).forEach(e => nameEmojis.add(e)))
+
   // Top 10 emojis
   const topEmojis = Object.entries(emojiCounts)
+    .filter(([emoji]) => !nameEmojis.has(emoji))
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10)
     .map(([emoji, count]) => ({ emoji, count }))

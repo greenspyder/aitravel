@@ -3,6 +3,8 @@
 import { motion } from 'framer-motion'
 import { ChatMetrics, Participant, Language } from '@/types/chat'
 import { ts } from '@/lib/i18n'
+import { FloatingOrbs } from '../FloatingOrbs'
+import { Sparkles } from '../Sparkles'
 
 interface Props {
   metrics: ChatMetrics
@@ -13,82 +15,115 @@ interface Props {
 
 export function SlideIntro({ metrics, participants, language, accentColor }: Props) {
   const date = new Date(metrics.firstMessage.date)
-  const months = t(language, 'months') as unknown as string[]
+  const months = ts(language, 'months') as unknown as string[]
   const dateStr = `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`
-
-  function t(lang: Language, key: Parameters<typeof ts>[1]) {
-    return ts(lang, key)
-  }
+  const topEmoji = metrics.topEmojis[0]?.emoji ?? '💬'
 
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-8 px-8">
+    <div className="relative flex flex-col items-center justify-center h-full gap-5 px-8 overflow-hidden">
+      <FloatingOrbs accentColor={accentColor} />
+      <Sparkles color={accentColor} count={12} />
+
+      {/* Decorative rings */}
+      {[340, 440, 540].map((size, i) => (
+        <motion.div
+          key={size}
+          className="absolute rounded-full border border-white/8"
+          style={{ width: size, height: size }}
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 1.2 + i * 0.15, ease: 'easeOut', delay: i * 0.1 }}
+        />
+      ))}
+
       {/* Avatars */}
       <motion.div
-        className="flex items-center gap-0"
+        className="flex items-center relative z-10"
         initial={{ scale: 0, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        transition={{ type: 'spring', stiffness: 200, damping: 20, delay: 0.2 }}
+        transition={{ type: 'spring', stiffness: 260, damping: 18, delay: 0.3 }}
       >
         {participants.slice(0, 2).map((p, i) => (
-          <div
+          <motion.div
             key={p.name}
-            className="w-24 h-24 rounded-full border-4 border-white/30 overflow-hidden bg-white/20 flex items-center justify-center"
-            style={{ marginLeft: i > 0 ? '-12px' : 0, zIndex: i > 0 ? 1 : 2 }}
+            className="w-28 h-28 rounded-full overflow-hidden bg-white/20 flex items-center justify-center shadow-2xl"
+            style={{
+              marginLeft: i > 0 ? '-16px' : 0,
+              zIndex: i > 0 ? 1 : 2,
+              border: `4px solid ${accentColor}60`,
+              boxShadow: `0 0 30px ${accentColor}40`,
+            }}
+            animate={{ y: [0, -6, 0] }}
+            transition={{ duration: 3 + i, repeat: Infinity, ease: 'easeInOut', delay: i * 0.5 }}
           >
             {p.photoUrl ? (
               <img src={p.photoUrl} alt={p.alias} className="w-full h-full object-cover" />
             ) : (
-              <span className="text-3xl font-bold text-white">
-                {p.alias.charAt(0).toUpperCase()}
-              </span>
+              <span className="text-4xl font-black text-white">{p.alias.charAt(0).toUpperCase()}</span>
             )}
-          </div>
+          </motion.div>
         ))}
         {participants.length > 2 && (
-          <div className="w-24 h-24 rounded-full border-4 border-white/30 bg-white/20 flex items-center justify-center -ml-3">
-            <span className="text-white font-bold">+{participants.length - 2}</span>
+          <div className="w-28 h-28 rounded-full bg-white/20 flex items-center justify-center -ml-4 border-4 border-white/30">
+            <span className="text-white font-black text-lg">+{participants.length - 2}</span>
           </div>
         )}
       </motion.div>
 
+      {/* Floating top emoji */}
+      <motion.div
+        className="text-5xl z-10"
+        initial={{ scale: 0, rotate: -30 }}
+        animate={{ scale: 1, rotate: 0 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 12, delay: 0.6 }}
+        style={{ filter: 'drop-shadow(0 0 12px rgba(255,255,255,0.4))' }}
+      >
+        {topEmoji}
+      </motion.div>
+
       {/* Names */}
-      <motion.div
-        className="text-center"
-        initial={{ y: 30, opacity: 0 }}
+      <motion.h1
+        className="text-white text-4xl font-black tracking-tight text-center leading-tight z-10"
+        style={{ textShadow: `0 0 40px ${accentColor}80, 0 2px 20px rgba(0,0,0,0.5)` }}
+        initial={{ y: 50, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.4 }}
+        transition={{ type: 'spring', stiffness: 220, damping: 20, delay: 0.45 }}
       >
-        <h1 className="text-white text-4xl font-black tracking-tight leading-tight">
-          {participants.slice(0, 2).map(p => p.alias).join(' & ')}
-          {participants.length > 2 && ` +${participants.length - 2}`}
-        </h1>
-      </motion.div>
+        {participants.slice(0, 2).map(p => p.alias).join(' & ')}
+        {participants.length > 2 && ` +${participants.length - 2}`}
+      </motion.h1>
 
-      {/* Title + date */}
+      {/* Date */}
       <motion.div
-        className="text-center space-y-1"
+        className="text-center z-10 space-y-1"
         initial={{ y: 30, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.6 }}
+        transition={{ delay: 0.65 }}
       >
-        <p className="text-white/60 text-lg uppercase tracking-widest font-medium">
-          {t(language, 'slide01Title')}
+        <p className="text-white/50 text-xs uppercase tracking-[0.3em]">
+          {ts(language, 'slide01Title')} · {ts(language, 'slide01Sub')}
         </p>
-        <p className="text-white/50 text-base">{t(language, 'slide01Sub')}</p>
-        <p className="text-white text-2xl font-bold" style={{ color: accentColor }}>
+        <motion.p
+          className="text-xl font-bold"
+          style={{ color: accentColor, textShadow: `0 0 20px ${accentColor}80` }}
+          initial={{ scale: 0.7 }}
+          animate={{ scale: 1 }}
+          transition={{ type: 'spring', stiffness: 250, delay: 0.85 }}
+        >
           {dateStr}
-        </p>
+        </motion.p>
       </motion.div>
 
-      {/* Total days badge */}
+      {/* Days pill */}
       <motion.div
-        className="px-6 py-2 rounded-full bg-white/10 border border-white/20"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.8 }}
+        className="px-6 py-2 rounded-full backdrop-blur-sm z-10 border border-white/20"
+        style={{ background: `${accentColor}20` }}
+        initial={{ opacity: 0, scale: 0.7 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ type: 'spring', stiffness: 200, delay: 1 }}
       >
-        <span className="text-white font-medium">
-          {metrics.totalDays} {t(language, 'days')}
+        <span className="text-white font-semibold text-sm">
+          {metrics.totalDays} {ts(language, 'days')} juntos 🗓️
         </span>
       </motion.div>
     </div>

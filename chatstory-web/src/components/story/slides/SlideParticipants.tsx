@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion'
 import { ChatMetrics, Participant, Language } from '@/types/chat'
 import { ts } from '@/lib/i18n'
+import { FloatingOrbs } from '../FloatingOrbs'
 
 interface Props {
   metrics: ChatMetrics
@@ -79,7 +80,8 @@ export function SlideParticipants({ metrics, participants, language, accentColor
   const display = participants.slice(0, 3)
 
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-6 px-6">
+    <div className="relative flex flex-col items-center justify-center h-full gap-6 px-6 overflow-hidden">
+      <FloatingOrbs accentColor={accentColor} />
       <motion.p
         className="text-white text-2xl font-bold text-center"
         initial={{ opacity: 0, y: -20 }}

@@ -16,7 +16,9 @@ import { SlideFirstMessage } from './slides/SlideFirstMessage'
 import { SlideStreak } from './slides/SlideStreak'
 import { SlideEnding } from './slides/SlideEnding'
 
-const SLIDE_DURATION = 8000 // ms
+const SLIDE_DURATION = 9000  // ms per slide
+const QUIZ_SLIDE = 2         // quiz index — auto-advance is paused until answered
+const LAST_SLIDE = 9         // ending slide — no auto-advance
 const TOTAL_SLIDES = 10
 
 interface Props {
@@ -32,16 +34,25 @@ export function StoryPlayer({ story, onClose }: Props) {
   const [currentSlide, setCurrentSlide] = useState(0)
   const [progress, setProgress] = useState(0)
   const [paused, setPaused] = useState(false)
-  const [direction, setDirection] = useState(1) // 1=forward, -1=backward
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [quizBlocked, setQuizBlocked] = useState(false) // true while on quiz, not yet answered
+  const [direction, setDirection] = useState(1)
   const pointerStartX = useRef<number | null>(null)
   const storyRef = useRef<HTMLDivElement>(null)
+
+  // Block auto-advance when entering quiz slide
+  useEffect(() => {
+    setProgress(0)
+    if (currentSlide === QUIZ_SLIDE) {
+      setQuizBlocked(true)
+    } else {
+      setQuizBlocked(false)
+    }
+  }, [currentSlide])
 
   const goTo = useCallback((index: number, dir: number = 1) => {
     if (index < 0 || index >= TOTAL_SLIDES) return
     setDirection(dir)
     setCurrentSlide(index)
-    setProgress(0)
   }, [])
 
   const goNext = useCallback(() => {
@@ -52,29 +63,31 @@ export function StoryPlayer({ story, onClose }: Props) {
     if (currentSlide > 0) goTo(currentSlide - 1, -1)
   }, [currentSlide, goTo])
 
+  // Quiz complete callback — called after 5s result display by SlideQuiz
+  const handleQuizComplete = useCallback(() => {
+    setQuizBlocked(false)
+    goNext()
+  }, [goNext])
+
   // Auto-advance timer
   useEffect(() => {
-    if (paused) return
+    const blocked = paused || quizBlocked || currentSlide === LAST_SLIDE
+    if (blocked) return
     const startTime = Date.now()
     const interval = setInterval(() => {
       const elapsed = Date.now() - startTime
       const pct = (elapsed / SLIDE_DURATION) * 100
       if (pct >= 100) {
         clearInterval(interval)
-        if (currentSlide < TOTAL_SLIDES - 1) {
-          goNext()
-        } else {
-          setProgress(100)
-        }
+        goNext()
       } else {
         setProgress(pct)
       }
     }, 50)
-    timerRef.current = interval
     return () => clearInterval(interval)
-  }, [currentSlide, paused, goNext])
+  }, [currentSlide, paused, quizBlocked, goNext])
 
-  // Keyboard navigation
+  // Keyboard
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'ArrowRight') goNext()
@@ -99,7 +112,8 @@ export function StoryPlayer({ story, onClose }: Props) {
       if (dx < 0) goNext()
       else goPrev()
     } else {
-      // Tap: right half = next, left half = prev
+      // On quiz slide, taps are for answering — don't navigate
+      if (currentSlide === QUIZ_SLIDE) return
       const rect = storyRef.current?.getBoundingClientRect()
       if (rect) {
         if (e.clientX > rect.left + rect.width / 2) goNext()
@@ -109,9 +123,9 @@ export function StoryPlayer({ story, onClose }: Props) {
   }
 
   const slideVariants = {
-    enter: (dir: number) => ({ x: dir > 0 ? '100%' : '-100%', opacity: 0 }),
-    center: { x: 0, opacity: 1 },
-    exit: (dir: number) => ({ x: dir > 0 ? '-100%' : '100%', opacity: 0 }),
+    enter: (dir: number) => ({ x: dir > 0 ? '100%' : '-100%', opacity: 0, scale: 0.95 }),
+    center: { x: 0, opacity: 1, scale: 1 },
+    exit: (dir: number) => ({ x: dir > 0 ? '-30%' : '30%', opacity: 0, scale: 0.95 }),
   }
 
   const slideProps = { metrics, participants, language, accentColor, theme }
@@ -140,7 +154,6 @@ export function StoryPlayer({ story, onClose }: Props) {
       } catch {}
     } else {
       await navigator.clipboard.writeText(window.location.href)
-      alert('Link copiado!')
     }
   }
 
@@ -148,20 +161,14 @@ export function StoryPlayer({ story, onClose }: Props) {
     switch (currentSlide) {
       case 0: return <SlideIntro {...slideProps} />
       case 1: return <SlideVolume {...slideProps} />
-      case 2: return <SlideQuiz {...slideProps} />
+      case 2: return <SlideQuiz {...slideProps} onComplete={handleQuizComplete} />
       case 3: return <SlideTime {...slideProps} />
       case 4: return <SlideEmojis {...slideProps} />
       case 5: return <SlideMonths {...slideProps} />
       case 6: return <SlideParticipants {...slideProps} />
       case 7: return <SlideFirstMessage {...slideProps} />
       case 8: return <SlideStreak {...slideProps} />
-      case 9: return (
-        <SlideEnding
-          {...slideProps}
-          onShare={handleShare}
-          onDownload={handleDownload}
-        />
-      )
+      case 9: return <SlideEnding {...slideProps} onShare={handleShare} onDownload={handleDownload} />
       default: return null
     }
   }
@@ -177,13 +184,13 @@ export function StoryPlayer({ story, onClose }: Props) {
       {/* Progress bars */}
       <div className="flex gap-1 px-3 pt-3 pb-2 z-10">
         {Array.from({ length: TOTAL_SLIDES }, (_, i) => (
-          <div key={i} className="flex-1 h-0.5 bg-white/30 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-white rounded-full transition-none"
+          <div key={i} className="flex-1 h-0.5 bg-white/20 rounded-full overflow-hidden">
+            <motion.div
+              className="h-full bg-white rounded-full"
               style={{
                 width:
                   i < currentSlide ? '100%' :
-                  i === currentSlide ? `${progress}%` :
+                  i === currentSlide ? (quizBlocked ? '0%' : `${progress}%`) :
                   '0%',
               }}
             />
@@ -191,9 +198,16 @@ export function StoryPlayer({ story, onClose }: Props) {
         ))}
       </div>
 
-      {/* Close button */}
+      {/* Slide counter */}
+      <div className="absolute top-6 left-1/2 -translate-x-1/2 z-20">
+        <span className="text-white/40 text-xs font-medium tabular-nums">
+          {currentSlide + 1}/{TOTAL_SLIDES}
+        </span>
+      </div>
+
+      {/* Close */}
       <button
-        className="absolute top-6 right-4 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-black/20"
+        className="absolute top-5 right-4 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-black/25 backdrop-blur-sm"
         onClick={(e) => { e.stopPropagation(); onClose() }}
         onPointerDown={(e) => e.stopPropagation()}
       >
@@ -210,7 +224,7 @@ export function StoryPlayer({ story, onClose }: Props) {
             initial="enter"
             animate="center"
             exit="exit"
-            transition={{ duration: 0.35, ease: 'easeInOut' }}
+            transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
             className="absolute inset-0"
           >
             {renderSlide()}

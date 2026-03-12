@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion'
 import { MessageSquare } from 'lucide-react'
 import { ChatMetrics, Participant, Language } from '@/types/chat'
+import { FloatingOrbs } from '../FloatingOrbs'
 import { ts } from '@/lib/i18n'
 
 interface Props {
@@ -29,7 +30,8 @@ export function SlideFirstMessage({ metrics, participants, language, accentColor
     : firstMessage.content
 
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-8 px-8">
+    <div className="relative flex flex-col items-center justify-center h-full gap-8 px-8 overflow-hidden">
+      <FloatingOrbs accentColor={accentColor} />
       <motion.div
         className="text-center space-y-1"
         initial={{ opacity: 0, y: -20 }}

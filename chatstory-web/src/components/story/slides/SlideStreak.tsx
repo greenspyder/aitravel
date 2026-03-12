@@ -3,6 +3,8 @@
 import { motion } from 'framer-motion'
 import { Flame } from 'lucide-react'
 import { ChatMetrics, Language } from '@/types/chat'
+import { FloatingOrbs } from '../FloatingOrbs'
+import { ConfettiBurst } from '../ConfettiBurst'
 import { ts } from '@/lib/i18n'
 
 interface Props {
@@ -18,7 +20,9 @@ export function SlideStreak({ metrics, language, accentColor }: Props) {
   const dateStr = `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`
 
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-8 px-8">
+    <div className="relative flex flex-col items-center justify-center h-full gap-8 px-8 overflow-hidden">
+      <FloatingOrbs accentColor={accentColor} />
+      <ConfettiBurst trigger={true} />
       <motion.div
         initial={{ scale: 0, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
