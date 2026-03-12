@@ -1,10 +1,12 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X } from 'lucide-react'
+import { X, Volume2, VolumeX } from 'lucide-react'
 import { StoryState } from '@/types/chat'
 import { THEMES, getThemeGradient } from '@/lib/themes'
+import { useAmbientAudio } from '@/lib/useAmbientAudio'
+import { ThemeBackground } from './ThemeBackground'
 import { SlideIntro } from './slides/SlideIntro'
 import { SlideVolume } from './slides/SlideVolume'
 import { SlideQuiz } from './slides/SlideQuiz'
@@ -16,10 +18,62 @@ import { SlideFirstMessage } from './slides/SlideFirstMessage'
 import { SlideStreak } from './slides/SlideStreak'
 import { SlideEnding } from './slides/SlideEnding'
 
-const SLIDE_DURATION = 9000  // ms per slide
-const QUIZ_SLIDE = 2         // quiz index — auto-advance is paused until answered
-const LAST_SLIDE = 9         // ending slide — no auto-advance
+const SLIDE_DURATION = 9000
+const QUIZ_SLIDE = 2
+const LAST_SLIDE = 9
 const TOTAL_SLIDES = 10
+
+// Transition style per slide — cycles through different feels like Spotify Wrapped
+type TransStyle = 'slide' | 'zoom' | 'swipeUp' | 'flip'
+const SLIDE_TRANS: TransStyle[] = [
+  'zoom',    // 0: Intro — big entrance
+  'swipeUp', // 1: Volume
+  'slide',   // 2: Quiz
+  'zoom',    // 3: Time
+  'swipeUp', // 4: Emojis
+  'slide',   // 5: Months
+  'swipeUp', // 6: Participants
+  'zoom',    // 7: First Message
+  'flip',    // 8: Streak — dramatic
+  'zoom',    // 9: Ending — grand reveal
+]
+
+function getVariants(slideIndex: number, dir: number) {
+  const style = SLIDE_TRANS[slideIndex] ?? 'slide'
+  switch (style) {
+    case 'zoom':
+      return {
+        enter: { scale: dir > 0 ? 0.6 : 1.4, opacity: 0, filter: 'blur(8px)' },
+        center: { scale: 1, opacity: 1, filter: 'blur(0px)' },
+        exit: { scale: dir > 0 ? 1.2 : 0.8, opacity: 0, filter: 'blur(6px)' },
+      }
+    case 'swipeUp':
+      return {
+        enter: { y: dir > 0 ? '100%' : '-100%', opacity: 0 },
+        center: { y: 0, opacity: 1 },
+        exit: { y: dir > 0 ? '-15%' : '15%', opacity: 0, scale: 0.95 },
+      }
+    case 'flip':
+      return {
+        enter: { rotateY: dir > 0 ? 90 : -90, opacity: 0, scale: 0.85 },
+        center: { rotateY: 0, opacity: 1, scale: 1 },
+        exit: { rotateY: dir > 0 ? -90 : 90, opacity: 0, scale: 0.85 },
+      }
+    default: // slide
+      return {
+        enter: { x: dir > 0 ? '100%' : '-100%', opacity: 0 },
+        center: { x: 0, opacity: 1 },
+        exit: { x: dir > 0 ? '-20%' : '20%', opacity: 0, scale: 0.9 },
+      }
+  }
+}
+
+function getTransition(slideIndex: number) {
+  const style = SLIDE_TRANS[slideIndex] ?? 'slide'
+  if (style === 'flip') return { duration: 0.5, ease: 'easeInOut' as const }
+  if (style === 'zoom') return { duration: 0.5, type: 'spring' as const, stiffness: 200, damping: 22 }
+  return { duration: 0.4, ease: 'easeInOut' as const }
+}
 
 interface Props {
   story: StoryState
@@ -34,26 +88,31 @@ export function StoryPlayer({ story, onClose }: Props) {
   const [currentSlide, setCurrentSlide] = useState(0)
   const [progress, setProgress] = useState(0)
   const [paused, setPaused] = useState(false)
-  const [quizBlocked, setQuizBlocked] = useState(false) // true while on quiz, not yet answered
+  const [quizBlocked, setQuizBlocked] = useState(false)
   const [direction, setDirection] = useState(1)
+  const [flash, setFlash] = useState(false)
   const pointerStartX = useRef<number | null>(null)
   const storyRef = useRef<HTMLDivElement>(null)
+
+  const { muted, toggle: toggleAudio } = useAmbientAudio(theme)
 
   // Block auto-advance when entering quiz slide
   useEffect(() => {
     setProgress(0)
-    if (currentSlide === QUIZ_SLIDE) {
-      setQuizBlocked(true)
-    } else {
-      setQuizBlocked(false)
-    }
+    setQuizBlocked(currentSlide === QUIZ_SLIDE)
   }, [currentSlide])
+
+  const triggerFlash = useCallback(() => {
+    setFlash(true)
+    setTimeout(() => setFlash(false), 200)
+  }, [])
 
   const goTo = useCallback((index: number, dir: number = 1) => {
     if (index < 0 || index >= TOTAL_SLIDES) return
+    triggerFlash()
     setDirection(dir)
     setCurrentSlide(index)
-  }, [])
+  }, [triggerFlash])
 
   const goNext = useCallback(() => {
     if (currentSlide < TOTAL_SLIDES - 1) goTo(currentSlide + 1, 1)
@@ -63,7 +122,6 @@ export function StoryPlayer({ story, onClose }: Props) {
     if (currentSlide > 0) goTo(currentSlide - 1, -1)
   }, [currentSlide, goTo])
 
-  // Quiz complete callback — called after 5s result display by SlideQuiz
   const handleQuizComplete = useCallback(() => {
     setQuizBlocked(false)
     goNext()
@@ -93,10 +151,11 @@ export function StoryPlayer({ story, onClose }: Props) {
       if (e.key === 'ArrowRight') goNext()
       if (e.key === 'ArrowLeft') goPrev()
       if (e.key === 'Escape') onClose()
+      if (e.key === 'm') toggleAudio()
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [goNext, goPrev, onClose])
+  }, [goNext, goPrev, onClose, toggleAudio])
 
   const handlePointerDown = (e: React.PointerEvent) => {
     pointerStartX.current = e.clientX
@@ -112,7 +171,6 @@ export function StoryPlayer({ story, onClose }: Props) {
       if (dx < 0) goNext()
       else goPrev()
     } else {
-      // On quiz slide, taps are for answering — don't navigate
       if (currentSlide === QUIZ_SLIDE) return
       const rect = storyRef.current?.getBoundingClientRect()
       if (rect) {
@@ -122,11 +180,8 @@ export function StoryPlayer({ story, onClose }: Props) {
     }
   }
 
-  const slideVariants = {
-    enter: (dir: number) => ({ x: dir > 0 ? '100%' : '-100%', opacity: 0, scale: 0.95 }),
-    center: { x: 0, opacity: 1, scale: 1 },
-    exit: (dir: number) => ({ x: dir > 0 ? '-30%' : '30%', opacity: 0, scale: 0.95 }),
-  }
+  const variants = useMemo(() => getVariants(currentSlide, direction), [currentSlide, direction])
+  const transitionCfg = useMemo(() => getTransition(currentSlide), [currentSlide])
 
   const slideProps = { metrics, participants, language, accentColor, theme }
 
@@ -181,8 +236,26 @@ export function StoryPlayer({ story, onClose }: Props) {
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
     >
+      {/* Persistent theme background decorations */}
+      <ThemeBackground themeName={theme} accentColor={accentColor} />
+
+      {/* Flash overlay on slide change */}
+      <AnimatePresence>
+        {flash && (
+          <motion.div
+            key="flash"
+            className="absolute inset-0 z-40 pointer-events-none"
+            style={{ background: accentColor }}
+            initial={{ opacity: 0.25 }}
+            animate={{ opacity: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Progress bars */}
-      <div className="flex gap-1 px-3 pt-3 pb-2 z-10">
+      <div className="flex gap-1 px-3 pt-3 pb-2 z-10 relative">
         {Array.from({ length: TOTAL_SLIDES }, (_, i) => (
           <div key={i} className="flex-1 h-0.5 bg-white/20 rounded-full overflow-hidden">
             <motion.div
@@ -205,6 +278,19 @@ export function StoryPlayer({ story, onClose }: Props) {
         </span>
       </div>
 
+      {/* Audio toggle */}
+      <button
+        className="absolute top-5 right-14 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-black/25 backdrop-blur-sm"
+        onClick={(e) => { e.stopPropagation(); toggleAudio() }}
+        onPointerDown={(e) => e.stopPropagation()}
+        title={muted ? 'Ativar som (M)' : 'Silenciar (M)'}
+      >
+        {muted
+          ? <VolumeX className="w-4 h-4 text-white/60" />
+          : <Volume2 className="w-4 h-4 text-white" />
+        }
+      </button>
+
       {/* Close */}
       <button
         className="absolute top-5 right-4 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-black/25 backdrop-blur-sm"
@@ -215,16 +301,14 @@ export function StoryPlayer({ story, onClose }: Props) {
       </button>
 
       {/* Slides */}
-      <div className="flex-1 relative overflow-hidden">
+      <div className="flex-1 relative overflow-hidden" style={{ perspective: 1200 }}>
         <AnimatePresence custom={direction} mode="wait">
           <motion.div
             key={currentSlide}
-            custom={direction}
-            variants={slideVariants}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+            initial={variants.enter}
+            animate={variants.center}
+            exit={variants.exit}
+            transition={transitionCfg}
             className="absolute inset-0"
           >
             {renderSlide()}
